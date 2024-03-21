@@ -6,6 +6,7 @@
 #include <ftw.h>
 #include <signal.h>
 
+int BUFFER_SIZE=2097152;
 int MAX_FILEHANDLES=64;
 int MAX_FILENAME_LENGTH=1024;
 
@@ -47,7 +48,7 @@ int encrypt_file(char *filename) {
   int num_r;
   int num_w;
   bool eof = false;
-  char buf[2097152];
+  char buf[BUFFER_SIZE];
   fprintf(stderr, "Working on: %s\n", filename);
   char newfilename[MAX_FILENAME_LENGTH+1+8];
   strncpy(newfilename, filename, MAX_FILENAME_LENGTH);
