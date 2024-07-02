@@ -134,7 +134,7 @@ static int file_cb(const char *fpath, const struct stat *sb,
     break;
   }
   if (signal_interrupt) {
-    fprintf(stderr, "Exiting after file completion.")
+    fprintf(stderr, "Exiting after file completion.");
     exit(EXIT_FAILURE);
   }
   return EXIT_SUCCESS;
