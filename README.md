@@ -11,3 +11,5 @@ Given the aim of this is to try and detect if ransomware detectors are working, 
 3) Create new files with the .bitflip extension and writing them out fully before removing the originals
 
 Each method should trip a ransomware detector.
+
+Obviously, use this at your own risk. It intentionally damages data, so be aware of what you're doing.
